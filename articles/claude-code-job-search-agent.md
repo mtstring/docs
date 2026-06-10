@@ -1,5 +1,5 @@
 ---
-title: "転職支援AIエージェントをClaude Codeで自作したら、API換算で月15万円だった話"
+title: "転職活動をClaude Code製の自分専用エージェントと走り抜けた話"
 emoji: "🤖"
 type: "tech"
 topics: ["claudecode", "claude", "ai", "mcp", "個人開発"]
