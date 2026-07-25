@@ -131,6 +131,28 @@ export class Stage {
     }
   }
 
+  /**
+   * 読み込んだキャラの大きさにカメラと操作範囲を合わせる。
+   * VRoid のキャラは身長も原点も個体差があるので、決め打ちにしない。
+   */
+  fitCharacter(box: Box3): void {
+    const center = box.getCenter(new Vector3());
+    const size = box.getSize(new Vector3());
+    const height = Math.max(size.y, 0.5);
+
+    // 胸のあたりを見る(頭でも足でもなく、全身が収まる高さ)
+    const target = new Vector3(center.x, box.min.y + height * 0.58, center.z);
+    const dist = (height / 2 / Math.tan((this.camera.fov * Math.PI) / 360)) * 1.35;
+
+    this.controls.target.copy(target);
+    this.camera.position.set(target.x, target.y + height * 0.06, target.z + dist);
+    this.camera.lookAt(target);
+
+    this.controls.minDistance = dist * 0.45;
+    this.controls.maxDistance = dist * 1.8;
+    this.controls.update();
+  }
+
   /** カメラをバウンディングボックスに合わせる(サムネイル生成用) */
   frameBox(box: Box3, azimuth = 0, padding = 1.25): void {
     const center = box.getCenter(new Vector3());

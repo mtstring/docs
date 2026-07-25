@@ -2,10 +2,14 @@
 
 子ども向け 3D 着せ替え PWA。**計画書は [docs/PLAN.md](docs/PLAN.md)** — 作業前に必ず読むこと。フェーズ定義(P0〜P5)・受け入れ条件・Go/No-Go 判定はすべてそこにある。現状の進捗は README を見ること。
 
+**素材方針は PLAN から変更済み**: Quaternius(CC0ローポリ)は画風が素朴で「可愛い」要件を満たせないため、VRoid Studio の VRM に切り替えた。経緯と手順は [docs/VROID.md](docs/VROID.md)。PLAN の §3(アセット調達)はこの点で古い。
+
 ## コマンド
 
 - `npm run dev` / `npm run build` / `npm run preview`
 - `npm run check:p0` — **ビルド後に**ヘッドレス Chromium で受け入れ条件を自動検証(24項目)。リグ・装着・色替え・顔・UI を触ったら必ず回す
+- `npm run check:vrm` — VRM 読み込み経路の検証(7項目)。`test-fixtures/minimal.vrm` を使うので実素材が無くても回る
+- `npm run inspect:vrm <file.vrm>` — VRM の中身を報告。**着せ替え方式を決める前に必ずこれを見る**
 - `npm run assets:sample` / `assets:icons` / `assets:thumbs` / `assets:optimize` / `assets:budget`
 
 ## いまの前提
@@ -31,3 +35,10 @@
 
 - `vite preview` を `npx` 経由で spawn すると孫プロセスに SIGTERM が伝わらず Node が終了しない。`scripts/lib/preview-server.mjs` はローカルバイナリを直接叩き、プロセスグループごと落としている
 - `Box3.expandByObject` は `visible=false` の子も含む。サムネイルの構図計算では表示中メッシュだけを見ること(`src/thumbnail.ts`)
+- **WebGL キャンバスを `drawImage`/`toDataURL` で読むと、合成後は空になる**(`preserveDrawingBuffer` 無効のため)。描画と読み出しを同じタスクで行う `Stage.capture()` を使うこと。検証コードでこれを踏むと「描画されていない」と誤判定する
+
+## VRM モードについて
+
+`VRM_CHARACTERS` が空でなければ VRM モード、空ならサンプルのモジュラー GLB モードで起動する(`src/main.ts`)。`?vrm=<path>` で登録なしの VRM も開ける。
+
+VRM モードの UI(`src/vrmUi.ts`)は**暫定でキャラ切替と背景だけ**。髪・服のメッシュ単位の着せ替えは、実物の VRM 構成を `inspect:vrm` で確認してから設計する方針で、まだ書いていない。実物を見ずに書くと当てずっぽうになるため、**推測で実装を進めないこと**。既存のモジュラーモード(検証24/24)を壊さないよう、VRM 経路は分離してある。

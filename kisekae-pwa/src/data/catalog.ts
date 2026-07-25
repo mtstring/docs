@@ -148,6 +148,23 @@ export const PALETTES: Record<ColorTarget, string[]> = {
   accessory: [],
 };
 
+export interface VrmCharacterDef {
+  id: string;
+  label: string; // 子どもに見せる名前(ひらがな)
+  file: string; // /models/vrm/....vrm
+}
+
+/**
+ * VRoid Studio で作った VRM を置いたら、ここに追加する。
+ *
+ * **1件でも入っていれば VRM モードで起動する**(サンプルのモジュラーGLBは使わない)。
+ * 空のあいだは従来のサンプルキャラで動く。
+ *
+ * VRoid では「同じキャラの服違い」を複数書き出しておくと、
+ * そのまま着せ替えのバリエーションになる。手順は docs/VROID.md を参照。
+ */
+export const VRM_CHARACTERS: VrmCharacterDef[] = [];
+
 export const BACKGROUNDS: { hex: string; label: string }[] = [
   { hex: '#fdf6f9', label: 'ぴんく' },
   { hex: '#eaf4ff', label: 'そら' },

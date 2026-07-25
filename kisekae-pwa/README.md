@@ -2,7 +2,9 @@
 
 子ども向けの 3D 着せ替えアプリ。3D キャラクターに服を着せ、髪型・髪色・顔・肌色を変え、前・斜め・横・後ろの好きな角度から眺められる。オフラインで動く PWA。
 
-詳細な計画・設計判断は [docs/PLAN.md](docs/PLAN.md) を参照。
+詳細な計画・設計判断は [docs/PLAN.md](docs/PLAN.md)、キャラ素材の作り方は **[docs/VROID.md](docs/VROID.md)** を参照。
+
+> **素材方針を変更しました**: 当初計画の Quaternius(CC0ローポリキット)は画風が素朴で「可愛い」要件を満たせないため、**VRoid Studio(pixiv製・無料)で作る VRM** に切り替えました。読み込み経路は実装・検証済みです(`npm run check:vrm` 7/7)。あとは実際にキャラを作って投入する段階です。
 
 > **注**: このディレクトリは本来 `mtstring/kisekae-pwa`(プライベートリポジトリ)のルートになる想定。リポジトリ作成権限の都合で一時的に `docs` リポジトリに置かれている。移設時はこのディレクトリをそのまま新リポジトリのルートにコピーすればよい(自己完結構成)。
 
@@ -16,6 +18,7 @@
 | P3 子ども向けUI | ✅ 完了 |
 | P4 PWA化 | ✅ 完了(実機オフライン確認は未実施) |
 | P5 お楽しみ | ✅ コーデ複数保存・しゃしん・背景切替 / ポーズ切替は対象外 |
+| VRM(VRoid) | ✅ 読み込み・表示・キャラ切替 / ⚠️ メッシュ単位の着せ替えは実物確認後に設計 |
 
 `npm run check:p0` の自動検証 **24/24 パス**(ボーン包含・装着・360度・塗り分け・顔切替・保存復元・UI・横向き)。
 
@@ -44,8 +47,15 @@ npm run assets:icons     # PWAアイコン生成
 npm run assets:thumbs    # サムネイル生成(要 build)
 npm run assets:optimize  # assets-raw/ を最適化して public/models/ へ + 予算チェック
 npm run assets:budget    # 容量予算(10MB)チェックのみ
-npm run check:p0         # ヘッドレスChromiumで受け入れ条件を自動検証(要 build)
+npm run assets:test-vrm  # 検証用の最小VRMを生成
+
+npm run inspect:vrm <file.vrm>   # VRMの中身を報告(着せ替え方式の判断材料)
+npm run check:p0         # 受け入れ条件を自動検証・24項目(要 build)
+npm run check:vrm [file] # VRM読み込み経路を検証・7項目(要 build)
 ```
+
+VRoid から書き出した VRM は、`public/models/vrm/` に置いて
+`http://localhost:4173/?vrm=/models/vrm/foo.vrm` を開けば**コードを触らず確認できます**。
 
 `assets:thumbs` と `check:p0` は `dist` を配信して実行するため、先に `npm run build` が必要。Chromium のパスは `CHROMIUM_PATH` で上書き可能(既定 `/opt/pw-browsers/chromium`)。
 
@@ -89,14 +99,22 @@ src/
 ├─ storage.ts       Coordinate と おきにいり の localStorage 保存/復元
 ├─ debugPanel.ts    メッシュ/ボーン/マテリアル一覧+ボーン包含判定
 ├─ ui.ts            タブ・アイテム・色・方位・道具・確認ダイアログ
-└─ data/catalog.ts  アイテム定義・顔バリエーション・パレット・型
+├─ vrm.ts           VRM読み込み(three-vrm)・humanoidボーン・要約
+├─ vrmCharacter.ts  VRMを丸ごと1体として扱う
+├─ vrmUi.ts         VRMモードのUI(暫定・キャラ切替と背景のみ)
+└─ data/catalog.ts  アイテム定義・顔バリエーション・パレット・VRM登録・型
 scripts/
 ├─ make-sample-assets.mjs  サンプルGLB生成(実アセット代替)
 ├─ make-icons.mjs          PWAアイコン生成(zlibで直接PNGを書く)
 ├─ make-thumbnails.mjs     サムネイル生成(ヘッドレスChromium)
 ├─ optimize-assets.mjs     gltf-transform 最適化 + 容量予算チェック
 ├─ p0-check.mjs            受け入れ条件の自動検証(24項目)+スクショ
-└─ lib/preview-server.mjs  dist配信の共通処理
+├─ inspect-vrm.mjs         VRM/GLBの中身を報告(WebGL不要)
+├─ make-test-vrm.mjs       検証用の最小VRM生成
+├─ check-vrm.mjs           VRM読み込み経路の検証(7項目)
+└─ lib/
+   ├─ preview-server.mjs   dist配信の共通処理
+   └─ glb.mjs              GLB/VRMのチャンク分解・再構築
 ```
 
 ## オフライン動作の確認

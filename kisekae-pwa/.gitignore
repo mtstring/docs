@@ -2,6 +2,8 @@ node_modules/
 dist/
 dev-dist/
 p0-shots/
-# Quaternius の zip から取り出した生アセット置き場(最適化前・コミットしない)
+# Quaternius/VRoid の生アセット置き場(最適化前・コミットしない)
 assets-raw/
+# アプリに同梱するVRM(容量が大きいので必要に応じて解除する)
+public/models/vrm/
 *.local

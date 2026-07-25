@@ -12,9 +12,13 @@
     "assets:thumbs": "node scripts/make-thumbnails.mjs",
     "assets:optimize": "node scripts/optimize-assets.mjs",
     "assets:budget": "node scripts/optimize-assets.mjs --budget-only",
-    "check:p0": "node scripts/p0-check.mjs"
+    "assets:test-vrm": "node scripts/make-test-vrm.mjs",
+    "inspect:vrm": "node scripts/inspect-vrm.mjs",
+    "check:p0": "node scripts/p0-check.mjs",
+    "check:vrm": "node scripts/check-vrm.mjs"
   },
   "dependencies": {
+    "@pixiv/three-vrm": "^3.5.5",
     "three": "^0.185.0"
   },
   "devDependencies": {
