@@ -2,4 +2,6 @@ node_modules/
 dist/
 dev-dist/
 p0-shots/
+# Quaternius の zip から取り出した生アセット置き場(最適化前・コミットしない)
+assets-raw/
 *.local

@@ -1,5 +1,6 @@
 import {
   AmbientLight,
+  Box3,
   Color,
   DirectionalLight,
   HemisphereLight,
@@ -85,6 +86,77 @@ export class Stage {
 
   onTick(fn: (dt: number) => void): void {
     this.tickers.push(fn);
+  }
+
+  setBackground(hex: string): void {
+    (this.scene.background as Color).set(hex);
+  }
+
+  /**
+   * 現在の画を PNG の dataURL で取り出す。
+   * preserveDrawingBuffer を有効にすると常時コストがかかるので、
+   * 描画と読み出しを同じタスク内で連続させて回避する。
+   */
+  capture(maxWidth?: number, type = 'image/png'): string {
+    this.renderer.render(this.scene, this.camera);
+    const src = this.renderer.domElement;
+    if (!maxWidth || src.width <= maxWidth) return src.toDataURL(type);
+
+    const scale = maxWidth / src.width;
+    const canvas = document.createElement('canvas');
+    canvas.width = maxWidth;
+    canvas.height = Math.round(src.height * scale);
+    canvas.getContext('2d')?.drawImage(src, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL(type);
+  }
+
+  /** 一時的に正方形サイズで描画する(サムネイル生成用)。終わったら元に戻す */
+  withSquare<T>(size: number, fn: () => T): T {
+    const prevW = this.renderer.domElement.width;
+    const prevH = this.renderer.domElement.height;
+    const prevAspect = this.camera.aspect;
+    const prevRatio = this.renderer.getPixelRatio();
+
+    this.renderer.setPixelRatio(1);
+    this.renderer.setSize(size, size, false);
+    this.camera.aspect = 1;
+    this.camera.updateProjectionMatrix();
+    try {
+      return fn();
+    } finally {
+      this.renderer.setPixelRatio(prevRatio);
+      this.renderer.setSize(prevW / prevRatio, prevH / prevRatio, false);
+      this.camera.aspect = prevAspect;
+      this.camera.updateProjectionMatrix();
+    }
+  }
+
+  /** カメラをバウンディングボックスに合わせる(サムネイル生成用) */
+  frameBox(box: Box3, azimuth = 0, padding = 1.25): void {
+    const center = box.getCenter(new Vector3());
+    const size = box.getSize(new Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const dist = ((maxDim / 2) / Math.tan((this.camera.fov * Math.PI) / 360)) * padding;
+
+    this.controls.target.copy(center);
+    this.camera.position.set(
+      center.x + Math.sin(azimuth) * dist,
+      center.y + dist * 0.12,
+      center.z + Math.cos(azimuth) * dist,
+    );
+    this.camera.lookAt(center);
+    this.camera.updateMatrixWorld();
+  }
+
+  /** カメラ状態を保存して復元する */
+  snapshotCamera(): () => void {
+    const pos = this.camera.position.clone();
+    const target = this.controls.target.clone();
+    return () => {
+      this.camera.position.copy(pos);
+      this.controls.target.copy(target);
+      this.camera.lookAt(target);
+    };
   }
 
   /** 現在の方位角(ラジアン) */

@@ -28,6 +28,7 @@ import {
   Skeleton,
   SkinnedMesh,
   SphereGeometry,
+  TorusGeometry,
 } from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
@@ -141,25 +142,110 @@ const mat = (name, color, opts = {}) =>
 
 // ---- 各パーツ ----------------------------------------------------------
 
+/**
+ * ベース(頭)。実キット同様、目・眉・口を別メッシュに分離し、
+ * さらにバリエーションを名前で区別できるようにする(PLAN §4.5 A案)。
+ * 命名規約: `Eye_01_L` / `Brow_02_R` / `Mouth_03`
+ * — アプリ側は `Eye_${選択id}` で始まるメッシュだけを visible にする。
+ *
+ * メッシュ名にドットは使わない。GLTFLoader が読み込み時に名前をサニタイズして
+ * ドットを落とすため(`Eye_01.L` → `Eye_01L`)、書き出し時の名前と一致しなくなる。
+ * ボーン名のドット(Blender 由来の `.L`/`.R`)はベース・パーツ双方が同じ変換を
+ * 受けるので照合には影響しない。
+ */
 function baseHead() {
   const skin = mat('Skin', 0xffffff); // 実行時に肌色を乗算するため白ベース
-  const dark = mat('Eye', 0x2b2320, { roughness: 0.4 });
+  const eyeMat = mat('Eye', 0xffffff, { roughness: 0.35 });
+  const browMat = mat('Brow', 0xffffff);
+  const mouthMat = mat('Mouth', 0xffffff);
 
-  const head = new SphereGeometry(0.17, 24, 18).translate(0, 1.5, 0);
-  const neck = new CylinderGeometry(0.05, 0.06, 0.14, 12).translate(0, 1.32, 0);
-  const eyeL = new SphereGeometry(0.022, 10, 8).translate(0.06, 1.52, 0.155);
-  const eyeR = new SphereGeometry(0.022, 10, 8).translate(-0.06, 1.52, 0.155);
-  const browL = new BoxGeometry(0.05, 0.012, 0.01).translate(0.06, 1.575, 0.163);
-  const browR = new BoxGeometry(0.05, 0.012, 0.01).translate(-0.06, 1.575, 0.163);
+  const parts = [
+    {
+      name: 'Head_Mesh',
+      geometry: new SphereGeometry(0.17, 24, 18).translate(0, 1.5, 0),
+      bone: 'Head',
+      material: skin,
+    },
+    {
+      name: 'Neck_Mesh',
+      geometry: new CylinderGeometry(0.05, 0.06, 0.14, 12).translate(0, 1.32, 0),
+      bone: 'Neck',
+      material: skin,
+    },
+  ];
 
-  return buildPart('BaseHead', [
-    { name: 'Head', geometry: head, bone: 'Head', material: skin },
-    { name: 'Neck', geometry: neck, bone: 'Neck', material: skin },
-    { name: 'Eye.L', geometry: eyeL, bone: 'Head', material: dark },
-    { name: 'Eye.R', geometry: eyeR, bone: 'Head', material: dark },
-    { name: 'Brow.L', geometry: browL, bone: 'Head', material: dark.clone() },
-    { name: 'Brow.R', geometry: browR, bone: 'Head', material: dark.clone() },
-  ]);
+  // 左右対称のパーツを2枚まとめて登録する
+  const addPair = (name, material, make) => {
+    for (const side of ['L', 'R']) {
+      const sign = side === 'L' ? 1 : -1;
+      parts.push({
+        name: `${name}_${side}`,
+        geometry: make(sign),
+        bone: 'Head',
+        material: material.clone(),
+      });
+    }
+  };
+
+  // --- 目 3種 ---
+  // 01 ふつう(まる)
+  addPair('Eye_01', eyeMat, (s) =>
+    new SphereGeometry(0.023, 12, 10).translate(s * 0.06, 1.52, 0.155),
+  );
+  // 02 にこにこ(細めたスリット)
+  addPair('Eye_02', eyeMat, (s) =>
+    new SphereGeometry(0.026, 12, 10).scale(1, 0.3, 1).translate(s * 0.06, 1.525, 0.157),
+  );
+  // 03 きらきら(おおきめ)
+  addPair('Eye_03', eyeMat, (s) =>
+    new SphereGeometry(0.033, 14, 12).scale(1, 1.15, 0.8).translate(s * 0.062, 1.518, 0.15),
+  );
+
+  // --- 眉 3種(髪色に追従させる) ---
+  // 01 ふつう(まっすぐ)
+  addPair('Brow_01', browMat, (s) =>
+    new BoxGeometry(0.052, 0.012, 0.01).translate(s * 0.06, 1.577, 0.163),
+  );
+  // 02 きりっ(内側さがり)
+  addPair('Brow_02', browMat, (s) =>
+    new BoxGeometry(0.055, 0.013, 0.01)
+      .rotateZ(s * -0.35)
+      .translate(s * 0.06, 1.577, 0.163),
+  );
+  // 03 やさしい(内側あがり)
+  addPair('Brow_03', browMat, (s) =>
+    new BoxGeometry(0.05, 0.012, 0.01)
+      .rotateZ(s * 0.3)
+      .translate(s * 0.061, 1.582, 0.163),
+  );
+
+  // --- 口 3種 ---
+  parts.push(
+    {
+      name: 'Mouth_01', // にこ
+      geometry: new TorusGeometry(0.032, 0.007, 6, 14, Math.PI)
+        .rotateZ(Math.PI)
+        .translate(0, 1.462, 0.163),
+      bone: 'Head',
+      material: mouthMat.clone(),
+    },
+    {
+      name: 'Mouth_02', // あーん
+      geometry: new SphereGeometry(0.024, 12, 10)
+        .scale(1, 1.25, 0.55)
+        .translate(0, 1.452, 0.16),
+      bone: 'Head',
+      material: mouthMat.clone(),
+    },
+    {
+      name: 'Mouth_03', // むー
+      geometry: new BoxGeometry(0.034, 0.011, 0.01).translate(0, 1.455, 0.165),
+      bone: 'Head',
+      material: mouthMat.clone(),
+    },
+  );
+
+  return buildPart('BaseHead', parts);
 }
 
 function hairShort() {
@@ -181,8 +267,8 @@ function hairLong() {
   return buildPart('HairLong', [
     { name: 'Hair_Long_Cap', geometry: cap, bone: 'Head', material: hair },
     { name: 'Hair_Long_Back', geometry: back, bone: 'Head', material: hair },
-    { name: 'Hair_Long_Side.L', geometry: sideL, bone: 'Head', material: hair },
-    { name: 'Hair_Long_Side.R', geometry: sideR, bone: 'Head', material: hair },
+    { name: 'Hair_Long_Side_L', geometry: sideL, bone: 'Head', material: hair },
+    { name: 'Hair_Long_Side_R', geometry: sideR, bone: 'Head', material: hair },
   ]);
 }
 
@@ -192,26 +278,26 @@ function outfitCommon(clothMat, skirt) {
   const parts = [
     { name: 'Torso', geometry: new BoxGeometry(0.3, 0.34, 0.18).translate(0, 1.12, 0), bone: 'Chest', material: clothMat },
     { name: 'Waist', geometry: new BoxGeometry(0.26, 0.2, 0.17).translate(0, 0.88, 0), bone: 'Spine', material: clothMat },
-    { name: 'Sleeve.L', geometry: new CylinderGeometry(0.05, 0.045, 0.2, 10).rotateZ(Math.PI / 2).translate(0.24, 1.2, 0), bone: 'UpperArm.L', material: clothMat },
-    { name: 'Sleeve.R', geometry: new CylinderGeometry(0.045, 0.05, 0.2, 10).rotateZ(Math.PI / 2).translate(-0.24, 1.2, 0), bone: 'UpperArm.R', material: clothMat },
-    { name: 'Hand.L', geometry: new SphereGeometry(0.045, 10, 8).translate(0.37, 1.2, 0), bone: 'Hand.L', material: skin },
-    { name: 'Hand.R', geometry: new SphereGeometry(0.045, 10, 8).translate(-0.37, 1.2, 0), bone: 'Hand.R', material: skin },
+    { name: 'Sleeve_L', geometry: new CylinderGeometry(0.05, 0.045, 0.2, 10).rotateZ(Math.PI / 2).translate(0.24, 1.2, 0), bone: 'UpperArm.L', material: clothMat },
+    { name: 'Sleeve_R', geometry: new CylinderGeometry(0.045, 0.05, 0.2, 10).rotateZ(Math.PI / 2).translate(-0.24, 1.2, 0), bone: 'UpperArm.R', material: clothMat },
+    { name: 'Hand_L', geometry: new SphereGeometry(0.045, 10, 8).translate(0.37, 1.2, 0), bone: 'Hand.L', material: skin },
+    { name: 'Hand_R', geometry: new SphereGeometry(0.045, 10, 8).translate(-0.37, 1.2, 0), bone: 'Hand.R', material: skin },
   ];
   if (skirt) {
     parts.push(
       { name: 'Skirt', geometry: new ConeGeometry(0.28, 0.5, 18, 1, true).translate(0, 0.55, 0), bone: 'Hips', material: clothMat },
-      { name: 'Leg.L', geometry: new CylinderGeometry(0.05, 0.045, 0.35, 10).translate(0.09, 0.28, 0), bone: 'LowerLeg.L', material: skin },
-      { name: 'Leg.R', geometry: new CylinderGeometry(0.045, 0.05, 0.35, 10).translate(-0.09, 0.28, 0), bone: 'LowerLeg.R', material: skin },
+      { name: 'Leg_L', geometry: new CylinderGeometry(0.05, 0.045, 0.35, 10).translate(0.09, 0.28, 0), bone: 'LowerLeg.L', material: skin },
+      { name: 'Leg_R', geometry: new CylinderGeometry(0.045, 0.05, 0.35, 10).translate(-0.09, 0.28, 0), bone: 'LowerLeg.R', material: skin },
     );
   } else {
     parts.push(
-      { name: 'Pants.L', geometry: new CylinderGeometry(0.06, 0.055, 0.6, 10).translate(0.09, 0.42, 0), bone: 'UpperLeg.L', material: clothMat },
-      { name: 'Pants.R', geometry: new CylinderGeometry(0.055, 0.06, 0.6, 10).translate(-0.09, 0.42, 0), bone: 'UpperLeg.R', material: clothMat },
+      { name: 'Pants_L', geometry: new CylinderGeometry(0.06, 0.055, 0.6, 10).translate(0.09, 0.42, 0), bone: 'UpperLeg.L', material: clothMat },
+      { name: 'Pants_R', geometry: new CylinderGeometry(0.055, 0.06, 0.6, 10).translate(-0.09, 0.42, 0), bone: 'UpperLeg.R', material: clothMat },
     );
   }
   parts.push(
-    { name: 'Shoe.L', geometry: new BoxGeometry(0.1, 0.08, 0.18).translate(0.09, 0.05, 0.02), bone: 'Foot.L', material: mat('Shoe', 0xf0f0f0) },
-    { name: 'Shoe.R', geometry: new BoxGeometry(0.1, 0.08, 0.18).translate(-0.09, 0.05, 0.02), bone: 'Foot.R', material: mat('Shoe', 0xf0f0f0) },
+    { name: 'Shoe_L', geometry: new BoxGeometry(0.1, 0.08, 0.18).translate(0.09, 0.05, 0.02), bone: 'Foot.L', material: mat('Shoe', 0xf0f0f0) },
+    { name: 'Shoe_R', geometry: new BoxGeometry(0.1, 0.08, 0.18).translate(-0.09, 0.05, 0.02), bone: 'Foot.R', material: mat('Shoe', 0xf0f0f0) },
   );
   return parts;
 }

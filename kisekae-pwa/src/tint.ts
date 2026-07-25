@@ -3,40 +3,66 @@ import { Mesh, MeshStandardMaterial, Object3D } from 'three';
 const cloned = new WeakSet<Mesh>();
 
 /**
- * メッシュに色を乗算適用する。
- * material.color はテクスチャへの乗算なので、明るいテクスチャほどよく染まる。
+ * メッシュのマテリアルをこのメッシュ専用に複製する。
  * clone を忘れると同じマテリアルを共有する他パーツまで染まるため、
- * メッシュごとに一度だけ clone してから色を変える。
+ * 色を触る前に必ず一度だけ通す。
  */
-export function tintMesh(mesh: Mesh, hex: string): void {
-  const apply = (m: MeshStandardMaterial) => m.color?.set(hex);
-
-  if (!cloned.has(mesh)) {
-    if (Array.isArray(mesh.material)) {
-      mesh.material = mesh.material.map((m) => m.clone());
-    } else {
-      mesh.material = mesh.material.clone();
-    }
-    cloned.add(mesh);
-  }
-
-  if (Array.isArray(mesh.material)) {
-    mesh.material.forEach((m) => apply(m as MeshStandardMaterial));
-  } else {
-    apply(mesh.material as MeshStandardMaterial);
-  }
+function ensureOwnMaterial(mesh: Mesh): void {
+  if (cloned.has(mesh)) return;
+  mesh.material = Array.isArray(mesh.material)
+    ? mesh.material.map((m) => m.clone())
+    : mesh.material.clone();
+  cloned.add(mesh);
 }
 
-/** ルート配下の全メッシュに色を適用 */
-export function tintTree(root: Object3D, hex: string): void {
+function materialsOf(mesh: Mesh): MeshStandardMaterial[] {
+  return (
+    Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+  ) as MeshStandardMaterial[];
+}
+
+/**
+ * ルート配下のメッシュのうち、マテリアル名が prefixes のいずれかで始まるものだけを塗る。
+ * material.color はテクスチャへの乗算なので、明るいテクスチャほどよく染まる。
+ *
+ * prefixes を省略すると全マテリアルが対象。服の色が手や靴まで乗ってしまうので、
+ * 実運用では Item.tintMaterials を必ず指定すること。
+ */
+export function tintTree(root: Object3D, hex: string, prefixes?: string[]): number {
+  let painted = 0;
   root.traverse((obj) => {
-    if ((obj as Mesh).isMesh) tintMesh(obj as Mesh, hex);
+    const mesh = obj as Mesh;
+    if (!mesh.isMesh) return;
+
+    const names = materialsOf(mesh).map((m) => m.name ?? '');
+    const hit = !prefixes || names.some((n) => prefixes.some((p) => n.startsWith(p)));
+    if (!hit) return;
+
+    ensureOwnMaterial(mesh);
+    materialsOf(mesh).forEach((m, i) => {
+      if (prefixes && !prefixes.some((p) => (names[i] ?? '').startsWith(p))) return;
+      m.color?.set(hex);
+      painted++;
+    });
   });
+  return painted;
 }
 
-/** 現在の色を16進で返す(検証用) */
-export function currentColorHex(mesh: Mesh): string | null {
-  const m = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
-  const c = (m as MeshStandardMaterial).color;
-  return c ? `#${c.getHexString()}` : null;
+/** 検証用: ルート配下で最初に見つかった該当マテリアルの現在色 */
+export function colorOfTree(root: Object3D, prefixes?: string[]): string | null {
+  let found: string | null = null;
+  root.traverse((obj) => {
+    if (found) return;
+    const mesh = obj as Mesh;
+    if (!mesh.isMesh) return;
+    for (const m of materialsOf(mesh)) {
+      const name = m.name ?? '';
+      if (prefixes && !prefixes.some((p) => name.startsWith(p))) continue;
+      if (m.color) {
+        found = `#${m.color.getHexString()}`;
+        return;
+      }
+    }
+  });
+  return found;
 }

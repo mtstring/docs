@@ -3,14 +3,16 @@ import { Character } from './character';
 import { Stage, ANGLES } from './scene';
 import { setupDebugPanel } from './debugPanel';
 import { setupUi } from './ui';
-import { loadCoordinate, saveCoordinate } from './storage';
-import type { Slot } from './data/catalog';
+import { loadCoordinate, loadSavedOutfits, saveCoordinate } from './storage';
+import { renderThumbnail } from './thumbnail';
+import { CATALOG, type ColorTarget, type FacePart, type Slot } from './data/catalog';
 
 registerSW({ immediate: true });
 
 async function boot(): Promise<void> {
   const stage = new Stage(document.getElementById('stage')!);
   const character = new Character(stage.scene, loadCoordinate());
+  stage.setBackground(character.coordinate.background);
 
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let refreshDebug: () => void = () => {};
@@ -31,10 +33,18 @@ async function boot(): Promise<void> {
     character,
     ANGLES,
     equip: (slot: Slot, id: string) => character.equip(slot, id),
-    setColor: (slot: Slot, hex: string) => character.setColor(slot, hex),
-    colorOf: (slot: Slot) => character.colorOf(slot),
+    setColor: (target: ColorTarget, hex: string) => character.setColor(target, hex),
+    setFace: (part: FacePart, id: string) => character.setFace(part, id),
+    colorOf: (target: ColorTarget) => character.colorOf(target),
+    visibleFaceMeshes: (part: FacePart) => character.visibleFaceMeshes(part),
+    debugMeshes: () => character.debugMeshes(),
+    applyCoordinate: (c: unknown) => character.apply(c as never),
     compatOf: (slot: Slot) => character.slotState(slot)?.compat ?? null,
     boneCount: () => character.baseMesh?.skeleton.bones.length ?? 0,
+    savedOutfits: () => loadSavedOutfits(),
+    catalog: () => CATALOG.map(({ id, slot, label }) => ({ id, slot, label })),
+    renderThumbnail: (itemId: string, opts?: Record<string, unknown>) =>
+      renderThumbnail(stage, character, itemId, opts ?? {}),
     ready: true,
   };
 }
